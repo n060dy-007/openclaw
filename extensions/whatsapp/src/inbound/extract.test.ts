@@ -180,6 +180,17 @@ describe("hasInboundUserContent", () => {
     ).toBe(true);
   });
 
+  it("returns true for poll creation messages", () => {
+    expect(
+      hasInboundUserContent({
+        pollCreationMessage: {
+          name: "Pick one",
+          options: [],
+        },
+      } as proto.IMessage),
+    ).toBe(true);
+  });
+
   it("returns true for buttons response (user button click)", () => {
     expect(
       hasInboundUserContent({

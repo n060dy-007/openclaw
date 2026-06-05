@@ -29,6 +29,16 @@ describe("web inbound helpers", () => {
     expect(body).toBe("doc");
   });
 
+  it("extracts WhatsApp poll questions", () => {
+    const body = extractText({
+      pollCreationMessage: {
+        name: " Reply after seeing this poll ",
+        options: [],
+      },
+    } as unknown as import("baileys").proto.IMessage);
+    expect(body).toBe("Reply after seeing this poll");
+  });
+
   it("extracts WhatsApp contact cards", () => {
     const body = extractText({
       contactMessage: {

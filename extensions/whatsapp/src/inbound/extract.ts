@@ -31,6 +31,9 @@ const MESSAGE_CONTENT_KEYS = [
   "liveLocationMessage",
   "contactMessage",
   "contactsArrayMessage",
+  "pollCreationMessage",
+  "pollCreationMessageV2",
+  "pollCreationMessageV3",
   "buttonsResponseMessage",
   "listResponseMessage",
   "templateButtonReplyMessage",
@@ -265,6 +268,10 @@ export function extractText(rawMessage: proto.IMessage | undefined): string | un
   if (contactPlaceholder) {
     return contactPlaceholder;
   }
+  const pollQuestion = extractPollQuestion(message);
+  if (pollQuestion) {
+    return pollQuestion;
+  }
   return undefined;
 }
 
@@ -303,6 +310,15 @@ function extractContactPlaceholder(rawMessage: proto.IMessage | undefined): stri
   }
   const suffix = contactContext.total === 1 ? "contact" : "contacts";
   return `<contacts: ${contactContext.total} ${suffix}>`;
+}
+
+function extractPollQuestion(rawMessage: proto.IMessage | undefined): string | undefined {
+  const message = unwrapMessage(rawMessage);
+  const question =
+    message?.pollCreationMessage?.name ??
+    message?.pollCreationMessageV2?.name ??
+    message?.pollCreationMessageV3?.name;
+  return question?.trim() || undefined;
 }
 
 export function extractContactContext(
