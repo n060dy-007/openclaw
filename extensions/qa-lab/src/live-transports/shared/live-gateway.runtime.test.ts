@@ -1,4 +1,7 @@
 // Qa Lab tests cover live gateway plugin behavior.
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import type { OpenClawConfig } from "openclaw/plugin-sdk/config-contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -157,6 +160,24 @@ describe("startQaLiveLaneGateway", () => {
   });
 
   it("forwards gateway stop options to the child harness", async () => {
+    const preserveToDir = await fs.mkdtemp(path.join(os.tmpdir(), "qa-live-gateway-debug-"));
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      text: async () =>
+        JSON.stringify({
+          raw: '{"input":"SECRET_PROMPT"}',
+          body: {
+            input: [{ role: "user", content: "SECRET_PROMPT" }],
+            model: "mock-openai/gpt-5.5",
+          },
+          prompt: "SECRET_PROMPT",
+          allInputText: "SECRET_PROMPT",
+          instructions: "SECRET_SYSTEM",
+          plannedToolArgs: { command: "SECRET_COMMAND" },
+          model: "mock-openai/gpt-5.5",
+          providerVariant: "openai",
+        }),
+    } as Response);
     const harness = await startQaLiveLaneGateway({
       repoRoot: "/tmp/openclaw-repo",
       transport: createStubTransport(),
@@ -167,9 +188,30 @@ describe("startQaLiveLaneGateway", () => {
       controlUiEnabled: false,
     });
 
-    await harness.stop({ preserveToDir: ".artifacts/qa-e2e/debug" });
-    expect(gatewayStop).toHaveBeenCalledWith({ preserveToDir: ".artifacts/qa-e2e/debug" });
-    expect(mockStop).toHaveBeenCalledTimes(1);
+    try {
+      await harness.stop({ preserveToDir });
+      expect(gatewayStop).toHaveBeenCalledWith({ preserveToDir });
+      expect(fetchSpy).toHaveBeenCalledWith("http://127.0.0.1:44080/debug/requests");
+      expect(fetchSpy).toHaveBeenCalledWith("http://127.0.0.1:44080/debug/last-request");
+      expect(
+        await fs.readFile(path.join(preserveToDir, "mock-provider-debug-requests.json"), "utf8"),
+      ).toContain('"model": "mock-openai/gpt-5.5"');
+      const lastRequestArtifact = await fs.readFile(
+        path.join(preserveToDir, "mock-provider-debug-last-request.json"),
+        "utf8",
+      );
+      expect(lastRequestArtifact).toContain('"model": "mock-openai/gpt-5.5"');
+      expect(lastRequestArtifact).toContain('"providerVariant": "openai"');
+      expect(lastRequestArtifact).toContain('"prompt": "<redacted>"');
+      expect(lastRequestArtifact).toContain('"input": "<redacted 1 item(s)>"');
+      expect(lastRequestArtifact).not.toContain("SECRET_PROMPT");
+      expect(lastRequestArtifact).not.toContain("SECRET_SYSTEM");
+      expect(lastRequestArtifact).not.toContain("SECRET_COMMAND");
+      expect(mockStop).toHaveBeenCalledTimes(1);
+    } finally {
+      fetchSpy.mockRestore();
+      await fs.rm(preserveToDir, { recursive: true, force: true });
+    }
   });
 
   it("skips mock bootstrap for live frontier runs", async () => {
